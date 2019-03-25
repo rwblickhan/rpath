@@ -101,6 +101,18 @@ impl Scene {
     }
 }
 
+fn perspective_projection(width: u32, height: u32, x: u32, y: u32) -> Point {
+    let w = f64::from(width);
+    let h = f64::from(height);
+    let x = f64::from(x);
+    let y = f64::from(y);
+    let fov_x = PI / 4.0;
+    let fov_y = h / w * fov_x;
+    Point::new((2.0 * x - w) / w * fov_x.tan(),
+               -(2.0 * y - h) / h * fov_y.tan(),
+               -1.0)
+}
+
 fn orthonormal_system(v1: &DirVec) -> (DirVec, DirVec) {
     let v2 = if v1.x.abs() > v1.y.abs() {
         let inv_len = 1.0 / (v1.x * v1.x + v1.z * v1.z).sqrt();
@@ -189,5 +201,8 @@ fn trace(ray: &Ray, scene: &Scene, depth: u32) -> Option<Color> {
 }
 
 fn main() {
+    let width = 900;
+    let height = 900;
+    let mut scene = Scene::default();
     println!("Hello, world!");
 }
