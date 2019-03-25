@@ -66,8 +66,12 @@ impl Geometry {
         }
     }
 
+    /// Compute the normal to the geometry at the point `p0`.
     fn normal(&self, p0: &Point) -> DirVec {
-        nalgebra::Unit::new_unchecked(nalgebra::Vector3::<Scalar>::zeros())
+        match self {
+            &Geometry::Plane { normal, offset: _ } => normal,
+            &Geometry::Sphere { center, radius : _} => nalgebra::Unit::new_normalize(p0 - center)
+        }
     }
 }
 
@@ -83,6 +87,7 @@ struct Scene {
 }
 
 impl Scene {
+    /// Intersect the given ray with all objects in the scene.
     fn intersect(&self, ray: &Ray) -> (Scalar, Option<&Object>) {
         self.objects.par_iter()
             .fold(|| (INFINITY, None),
@@ -204,5 +209,152 @@ fn main() {
     let width = 900;
     let height = 900;
     let mut scene = Scene::default();
-    println!("Hello, world!");
+
+    scene.objects.push(Object {
+        geometry: Geometry::Sphere {
+            center: Point::new(-0.75, -1.45, -4.4),
+            radius: 1.05,
+        },
+        material: Material {
+            color: Color::new(4.0, 8.0, 4.0),
+            emission: 0.0,
+            mat_type: MaterialType::Specular,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Sphere {
+            center: Point::new(2.0, -2.05, -3.7),
+            radius: 0.5,
+        },
+        material: Material {
+            color: Color::new(10.0, 10.0, 1.0),
+            emission: 0.0,
+            mat_type: MaterialType::Refractive,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Sphere {
+            center: Point::new(-1.75, -1.95, -3.1),
+            radius: 0.6,
+        },
+        material: Material {
+            color: Color::new(4.0, 4.0, 12.0),
+            emission: 0.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Sphere {
+            center: Point::new(0.0, 1.9, -3.0),
+            radius: 0.5,
+        },
+        material: Material {
+            color: Color::new(0.0, 0.0, 0.0),
+            emission: 10000.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Plane {
+            normal: nalgebra::Unit::new_normalize(nalgebra::Vector3::new(0.0, 1.0, 0.0)),
+            offset: 2.5,
+        },
+        material: Material {
+            color: Color::new(6.0, 6.0, 6.0),
+            emission: 0.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Plane {
+            normal: nalgebra::Unit::new_normalize(nalgebra::Vector3::new(0.0, 0.0, 1.0)),
+            offset: 5.5,
+        },
+        material: Material {
+            color: Color::new(6.0, 6.0, 6.0),
+            emission: 0.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Plane {
+            normal: nalgebra::Unit::new_normalize(nalgebra::Vector3::new(1.0, 0.0, 0.0)),
+            offset: 2.75,
+        },
+        material: Material {
+            color: Color::new(10.0, 2.0, 2.0),
+            emission: 0.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Plane {
+            normal: nalgebra::Unit::new_normalize(nalgebra::Vector3::new(-1.0, 0.0, 0.0)),
+            offset: 2.75,
+        },
+        material: Material {
+            color: Color::new(2.0, 10.0, 2.0),
+            emission: 0.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Plane {
+            normal: nalgebra::Unit::new_normalize(nalgebra::Vector3::new(0.0, -1.0, 0.0)),
+            offset: 3.0,
+        },
+        material: Material {
+            color: Color::new(6.0, 6.0, 6.0),
+            emission: 0.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+    scene.objects.push(Object {
+        geometry: Geometry::Plane {
+            normal: nalgebra::Unit::new_normalize(nalgebra::Vector3::new(0.0, 0.0, -1.0)),
+            offset: 0.5,
+        },
+        material: Material {
+            color: Color::new(6.0, 6.0, 6.0),
+            emission: 0.0,
+            mat_type: MaterialType::Diffuse,
+        },
+    });
+
+    let mut pixels: Vec<Vec<Color>> = Vec::new();
+    pixels.par_extend((0..height).into_par_iter().map(|row| {
+        let mut row_vec = Vec::new();
+        row_vec.par_extend((0..width).into_par_iter().map(|col| {
+            let mut rng = rand::thread_rng();
+            let mut color = Color::new(0.0, 0.0, 0.0);
+            for _sample in 0..8 {
+                let mut image_plane_pos = perspective_projection(width, height, col, row);
+                image_plane_pos.x = image_plane_pos.x + rng.gen::<f64>() / 700.0;
+                image_plane_pos.y = image_plane_pos.y + rng.gen::<f64>() / 700.0;
+                let ray = Ray {
+                    origin: Point::new(0.0, 0.0, 0.0),
+                    dir: nalgebra::Unit::new_normalize(image_plane_pos - Point::new(0.0, 0.0, 0.0)),
+                };
+                let out_color = trace(&ray, &scene, 0);
+                color += out_color.unwrap_or(Color::new(0.0, 0.0, 0.0)) / 8.0;
+            }
+            color
+        }));
+        row_vec
+    }));
+
+    println!("P3");
+    println!("{} {}", width, height);
+    println!("255");
+
+    let mut pixels_iter = pixels.iter();
+    while let Some(row) = pixels_iter.next() {
+        let mut row_iter = row.iter();
+        while let Some(pixel) = row_iter.next() {
+            let r = f64::min(pixel.x, 255.0) as i32;
+            let g = f64::min(pixel.y, 255.0) as i32;
+            let b = f64::min(pixel.z, 255.0) as i32;
+            println!("{} {} {}", r, g, b);
+        }
+    }
 }
