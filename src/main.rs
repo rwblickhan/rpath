@@ -1,8 +1,10 @@
 use rand::prelude::*;
 use rayon::prelude::*;
+use std::io::prelude::*;
 
 use std::f64::INFINITY;
 use std::f64::consts::PI;
+use std::io::BufWriter;
 
 type Scalar = f64;
 type Point = nalgebra::Point3<Scalar>;
@@ -70,7 +72,7 @@ impl Geometry {
     fn normal(&self, p0: &Point) -> DirVec {
         match self {
             &Geometry::Plane { normal, offset: _ } => normal,
-            &Geometry::Sphere { center, radius : _} => nalgebra::Unit::new_normalize(p0 - center)
+            &Geometry::Sphere { center, radius: _ } => nalgebra::Unit::new_normalize(p0 - center)
         }
     }
 }
@@ -205,9 +207,9 @@ fn trace(ray: &Ray, scene: &Scene, depth: u32) -> Option<Color> {
     }
 }
 
-fn main() {
-    let width = 900;
-    let height = 900;
+fn main() -> std::io::Result<()> {
+    let width: u32 = 900;
+    let height: u32 = 900;
     let mut scene = Scene::default();
 
     scene.objects.push(Object {
@@ -321,6 +323,20 @@ fn main() {
         },
     });
 
+    let (tx, rx) = std::sync::mpsc::sync_channel::<i32>((width * height) as usize);
+
+    std::thread::spawn(move || {
+        let mut total = 0;
+        loop {
+            let received = rx.recv().unwrap();
+            if received < 0 {
+                return;
+            }
+            total += received;
+            println!("{:.2}% complete", (total as f64 / (width as f64 * height as f64)) * 100.0);
+        }
+    });
+
     let mut pixels: Vec<Vec<Color>> = Vec::new();
     pixels.par_extend((0..height).into_par_iter().map(|row| {
         let mut row_vec = Vec::new();
@@ -335,17 +351,21 @@ fn main() {
                     origin: Point::new(0.0, 0.0, 0.0),
                     dir: nalgebra::Unit::new_normalize(image_plane_pos - Point::new(0.0, 0.0, 0.0)),
                 };
-                let out_color = trace(&ray, &scene, 0);
-                color += out_color.unwrap_or(Color::new(0.0, 0.0, 0.0)) / 8.0;
+                color += trace(&ray, &scene, 0).unwrap_or(Color::new(0.0, 0.0, 0.0)) / 8.0;
             }
+            tx.send(1).unwrap();
             color
         }));
         row_vec
     }));
 
-    println!("P3");
-    println!("{} {}", width, height);
-    println!("255");
+    tx.send(-1).unwrap();
+
+    let file = std::fs::File::create("ray.ppm")?;
+    let mut writer = BufWriter::new(file);
+    writeln!(&mut writer, "P3")?;
+    writeln!(&mut writer, "{} {}", width, height)?;
+    writeln!(&mut writer, "255")?;
 
     let mut pixels_iter = pixels.iter();
     while let Some(row) = pixels_iter.next() {
@@ -354,7 +374,9 @@ fn main() {
             let r = f64::min(pixel.x, 255.0) as i32;
             let g = f64::min(pixel.y, 255.0) as i32;
             let b = f64::min(pixel.z, 255.0) as i32;
-            println!("{} {} {}", r, g, b);
+            writeln!(&mut writer, "{} {} {}", r, g, b)?;
         }
     }
+
+    Ok(())
 }
