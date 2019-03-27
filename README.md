@@ -7,6 +7,10 @@ featuring (at the moment) diffuse, specular, and refractive
 (glass) materials, sphere and plane geometry, and
 Russian roulette stopping.
 
+![Example](ray.png)
+
+This example image was generated with 1000 samples per pixel.
+
 Make sure to run in release mode:
 ```
 cargo run --release
