@@ -337,13 +337,14 @@ fn main() -> std::io::Result<()> {
         }
     });
 
+    let num_samples = 100;
     let mut pixels: Vec<Vec<Color>> = Vec::new();
     pixels.par_extend((0..height).into_par_iter().map(|row| {
         let mut row_vec = Vec::new();
         row_vec.par_extend((0..width).into_par_iter().map(|col| {
             let mut rng = rand::thread_rng();
             let mut color = Color::new(0.0, 0.0, 0.0);
-            for _sample in 0..8 {
+            for _sample in 0..num_samples {
                 let mut image_plane_pos = perspective_projection(width, height, col, row);
                 image_plane_pos.x = image_plane_pos.x + rng.gen::<f64>() / 700.0;
                 image_plane_pos.y = image_plane_pos.y + rng.gen::<f64>() / 700.0;
@@ -351,7 +352,7 @@ fn main() -> std::io::Result<()> {
                     origin: Point::new(0.0, 0.0, 0.0),
                     dir: nalgebra::Unit::new_normalize(image_plane_pos - Point::new(0.0, 0.0, 0.0)),
                 };
-                color += trace(&ray, &scene, 0).unwrap_or(Color::new(0.0, 0.0, 0.0)) / 8.0;
+                color += trace(&ray, &scene, 0).unwrap_or(Color::new(0.0, 0.0, 0.0)) / f64::from(num_samples);
             }
             tx.send(1).unwrap();
             color
